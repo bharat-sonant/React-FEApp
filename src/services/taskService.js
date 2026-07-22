@@ -40,17 +40,26 @@ const cityFolder = (city) => {
 /**
  * KPI tasks: FieldExecutiveData/FieldExecutiveKPITasks/{userId}
  * Each child is { taskId: taskName }.
+ *
+ * Numeric task ids make Firebase return the node as a sparse array
+ * (e.g. [null, "Task"]), so null holes and non-task keys are skipped —
+ * otherwise a phantom "null" card shows up on the dashboard.
  */
 export const getKpiTasks = async (userId) => {
   const snap = await getData(`FieldExecutiveData/FieldExecutiveKPITasks/${userId}`);
   if (!snap || typeof snap !== 'object') return [];
-  return Object.entries(snap).map(([id, name]) => ({
-    id,
-    title: String(name),
-    type: 'KPI',
-    priority: 'low',
-    category: 'KPI',
-  }));
+  const out = [];
+  for (const [id, name] of Object.entries(snap)) {
+    if (id === 'lastKey' || name == null) continue;
+    out.push({
+      id,
+      title: String(name),
+      type: 'KPI',
+      priority: 'low',
+      category: 'KPI',
+    });
+  }
+  return out;
 };
 
 /**
