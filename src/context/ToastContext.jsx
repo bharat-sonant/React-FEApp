@@ -60,11 +60,15 @@ const Toast = ({ toast, onHide }) => {
   );
 };
 
+// Monotonic toast id — Date.now() can collide when two toasts fire within the
+// same millisecond (e.g. a double-tapped submit), which would skip the remount.
+let toastSeq = 0;
+
 export const ToastProvider = ({ children }) => {
   const [toast, setToast] = useState(null);
 
   const showToast = useCallback((message, type = 'success') => {
-    setToast({ id: Date.now(), message, type });
+    setToast({ id: ++toastSeq, message, type });
   }, []);
 
   const hide = useCallback((id) => {
@@ -76,7 +80,12 @@ export const ToastProvider = ({ children }) => {
       {children}
       {toast && (
         <View pointerEvents="box-none" style={styles.host}>
-          <Toast toast={toast} onHide={hide} />
+          {/* key forces a fresh mount per toast: new entrance animation and a
+              new auto-hide timer. Without it a toast shown while another is
+              visible reuses the old instance — the old timer then hides the
+              new toast and its onHide(staleId) never clears state, leaving an
+              invisible mounted toast that swallows every later showToast. */}
+          <Toast key={toast.id} toast={toast} onHide={hide} />
         </View>
       )}
     </ToastContext.Provider>
