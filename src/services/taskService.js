@@ -121,30 +121,6 @@ export const getSubmittedTasks = async (userId, { year, month, today }) => {
 const byName = (a, b) => a.title.localeCompare(b.title);
 
 /**
- * One entry per task id, for the "Add …" form's dropdown only.
- *
- * A manager can assign the *same* task as both a KPI and a Priority item — same
- * id, same name, only the category differs. The dashboard deliberately shows
- * both (they are two separate pieces of work to tick off), but the dropdown is
- * a "which task am I filling this form for?" picker, so a repeated name there
- * is just confusing.
- *
- * The Priority version wins: it is the more urgent assignment and it carries
- * the subKey needed to mark the priority record done on submit.
- */
-const dedupeById = (priority = [], kpi = []) => {
-  const seen = new Set();
-  const out = [];
-  for (const t of [...priority.sort(byName), ...kpi.sort(byName)]) {
-    const id = String(t.id);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(t);
-  }
-  return out;
-};
-
-/**
  * A task row's unique identity. The task id alone is NOT unique: the same task
  * can be assigned as a KPI (low) *and* as a Priority (high), and a single
  * priority taskKey can hold several sub-entries. Use this for React list keys,
@@ -180,19 +156,15 @@ export const getOtherTasks = async () => {
 };
 
 /**
- * The tasks selectable in the "Add …" form, matching the old AddTaskActivity:
- *   ADD_KPI   → this user's KPI tasks + today's Priority tasks (priority first)
- *   ADD_OTHER → the global Tasks catalogue (never merges priority tasks)
+ * The tasks selectable in the "Add …" form:
+ *   ADD_KPI   → ONLY this user's KPI tasks (the FieldExecutiveKPITasks node).
+ *               Priority tasks are executed from their dashboard card (PICK
+ *               mode), so they don't belong in this dropdown.
+ *   ADD_OTHER → the global Tasks catalogue.
  */
 export const getSelectableTasks = async (mode, userId) => {
   if (mode === 'ADD_OTHER') return getOtherTasks();
-
-  const { today } = getDateParts();
-  const [kpi, priority] = await Promise.all([
-    getKpiTasks(userId),
-    getPriorityTasks(userId, today),
-  ]);
-  return dedupeById(priority, kpi);
+  return (await getKpiTasks(userId)).sort(byName);
 };
 
 /**
