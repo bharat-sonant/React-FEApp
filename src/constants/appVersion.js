@@ -25,8 +25,8 @@ export const RELEASE_VERSION = '1.0.0.1';
  *          OTA is skipped that run (a native release, not a JS hot-fix).
  * Flip these before pushing depending on what the release contains.
  */
-export const PUBLISH_OTA_BY_DEFAULT = true;
-export const PUBLISH_APK_BY_DEFAULT = false;
+export const PUBLISH_OTA_BY_DEFAULT = false;
+export const PUBLISH_APK_BY_DEFAULT = true;
 
 /**
  * GitHub "latest release" API for your APK/OTA repo. FILL THIS IN:

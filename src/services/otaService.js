@@ -112,15 +112,17 @@ export const checkForUpdates = async (callbacks = {}) => {
 
     const release = await res.json();
     const latestVersion = normalizeVersion(release?.tag_name);
-    const installed = await getInstalledVersion();
-    if (!latestVersion || latestVersion === installed) return false;
+    if (!latestVersion) return false;
 
     const assets = Array.isArray(release?.assets) ? release.assets : [];
     const jsAsset =
       assets.find((a) => a?.name === 'ota-package.zip') ||
       assets.find((a) => a?.name === 'index.android.bundle');
 
-    // Seamless JS-bundle update.
+    // Seamless JS-bundle update — driven purely by the asset id, like the IEC
+    // app: a fresh ota-package.zip published on the SAME release tag is still
+    // an update. No version comparison here (a JS OTA never changes the
+    // installed versionName anyway).
     if (ENABLE_JS_BUNDLE_OTA && jsAsset) {
       const assetId = String(jsAsset.id);
       const applied = await AsyncStorage.getItem(LAST_ASSET_KEY);
@@ -136,8 +138,10 @@ export const checkForUpdates = async (callbacks = {}) => {
       return true;
     }
 
-    // No JS bundle for a newer version → the native app itself changed → block
-    // and ask the user to install the new APK.
+    // APK-only release (no JS asset): a native change. Block only when the
+    // release tag has moved past the installed APK's versionName.
+    const installed = await getInstalledVersion();
+    if (!installed || latestVersion === installed) return false;
     onUpdateFound?.({
       version: latestVersion,
       type: 'native',
