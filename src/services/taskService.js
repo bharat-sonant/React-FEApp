@@ -83,6 +83,10 @@ export const getPriorityTasks = async (userId, today) => {
         type: 'Priority Task',
         priority: 'high',
         category: 'Priority',
+        // Per-assignment done flag (submit writes status '1' on this subKey).
+        // The authoritative signal: a re-assignment of the same task gets a
+        // fresh subKey with no status, so it must NOT inherit "done".
+        statusDone: String(entry.status ?? '') === '1',
       });
     }
   }

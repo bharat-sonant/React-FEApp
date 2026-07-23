@@ -32,14 +32,29 @@ export const loadDashboard = async () => {
 export { taskCardKey };
 
 /**
- * Flag each assigned task that has already been submitted today, matching the
- * old app (by taskId + priority). Submitted records carry only those two
- * fields, so this is coarser than taskCardKey — sub-entries of one priority
- * task all flip to done together, exactly as the old app behaved.
+ * Flag each assigned task that has already been submitted today.
+ *
+ * KPI (low): matched by taskId + type against today's submitted records —
+ * they have no per-assignment node, so this is all the data there is.
+ *
+ * Priority (high): the subKey's own `status` flag (statusDone) is
+ * authoritative — a re-assignment of the same task is a NEW subKey with no
+ * status, so it stays pending instead of inheriting an earlier submission's
+ * "done" (submitted records carry no subKey, so a taskKey match can't tell
+ * the two assignments apart). Local (pre-sync) completions DO carry the
+ * subKey, so they flip exactly the sub-entry that was submitted.
  */
 export const markAssignedDone = (assigned = [], completed = []) => {
-  const doneSet = new Set(completed.map((c) => `${c.taskKey}|${c.type}`));
-  return assigned.map((t) => ({ ...t, done: doneSet.has(`${t.id}|${t.priority}`) }));
+  const doneSet = new Set(
+    completed.map((c) => `${c.taskKey}|${c.type}|${c.subKey ?? ''}`),
+  );
+  return assigned.map((t) => ({
+    ...t,
+    done:
+      t.priority === 'high'
+        ? Boolean(t.statusDone) || doneSet.has(`${t.id}|high|${t.subKey ?? ''}`)
+        : doneSet.has(`${t.id}|low|`),
+  }));
 };
 
 /**
@@ -53,12 +68,17 @@ export const addLocalCompletion = (completed = [], task) => {
     taskKey: String(task.id),
     title: task.title || String(task.id),
     type: task.priority === 'high' ? 'high' : 'low',
+    // Which priority sub-entry was completed — so markAssignedDone flips only
+    // that assignment, not a re-assignment sharing the same taskKey.
+    subKey: task.subKey ?? null,
     remark: '',
     image1: '',
     at: '',
   };
-  const key = `${entry.taskKey}|${entry.type}`;
-  if (completed.some((c) => `${c.taskKey}|${c.type}` === key)) return completed;
+  const key = `${entry.taskKey}|${entry.type}|${entry.subKey ?? ''}`;
+  if (completed.some((c) => `${c.taskKey}|${c.type}|${c.subKey ?? ''}` === key)) {
+    return completed;
+  }
   return [...completed, entry];
 };
 
