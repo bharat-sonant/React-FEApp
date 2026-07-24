@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StatusBar } from 'react-native';
+import { BackHandler, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import SplashScreen from './src/Screens/SplashScreen/SplashScreen';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -57,7 +57,10 @@ const App = () => {
   const onUpdatePress = () => {
     setOtaError('');
     if (update?.type === 'native') {
-      update.apply?.(); // exits the app; user reinstalls
+      // Version-expired block: OK closes the app. The check re-runs on the next
+      // launch (see the effect above), so the block keeps reappearing until the
+      // user installs the new APK.
+      BackHandler.exitApp();
       return;
     }
     setOtaDownloading(true);

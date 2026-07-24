@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
 import {
   Camera,
   CheckCircle2,
@@ -26,7 +25,6 @@ import {
 } from 'lucide-react-native';
 import AppHeader from '../../components/AppHeader';
 import GradientButton from '../../components/GradientButton';
-import ActionSheet from '../../components/ActionSheet';
 import TaskPickerSheet from '../../components/TaskPickerSheet';
 import Loader from '../../components/Loader';
 import { useToast } from '../../context/ToastContext';
@@ -123,7 +121,6 @@ const TaskExecutionScreen = ({ navigation, route }) => {
   const [videos, setVideos] = useState([]);
   const [remark, setRemark] = useState('');
   const [remarkFocused, setRemarkFocused] = useState(false);
-  const [sheet, setSheet] = useState(null); // 'img' | 'vid' | null
   const [viewer, setViewer] = useState(null); // { type, uri }
   const [submitting, setSubmitting] = useState(false);
 
@@ -204,34 +201,6 @@ const TaskExecutionScreen = ({ navigation, route }) => {
   const removeImage = (id) => setImages((p) => p.filter((x) => x.id !== id));
   const removeVideo = (id) => setVideos((p) => p.filter((x) => x.id !== id));
 
-  const pickFromGallery = async (type) => {
-    // Allow picking as many as there are free slots left.
-    const remaining =
-      type === 'img' ? MAX_IMAGES - images.length : MAX_VIDEOS - videos.length;
-    if (remaining <= 0) {
-      showToast(
-        `You can add up to ${type === 'img' ? MAX_IMAGES : MAX_VIDEOS} ${
-          type === 'img' ? 'photos' : 'videos'
-        }`,
-        'warning',
-      );
-      return;
-    }
-
-    const res = await launchImageLibrary({
-      mediaType: type === 'img' ? 'photo' : 'video',
-      selectionLimit: remaining,
-    });
-    if (res?.didCancel) return;
-
-    const assets = (res?.assets || []).filter((a) => a?.uri);
-    assets.slice(0, remaining).forEach((a) => addMedia(type, 'gallery', a.uri));
-
-    if (assets.length > remaining) {
-      showToast(`Only ${remaining} more could be added`, 'info');
-    }
-  };
-
   const openCamera = (type) => navigation.navigate('Camera', { mediaType: type });
 
   const handleSubmit = async () => {
@@ -268,45 +237,6 @@ const TaskExecutionScreen = ({ navigation, route }) => {
     }
     return undefined;
   };
-
-  const sheetOptions =
-    sheet === 'img'
-      ? [
-          {
-            key: 'cam',
-            label: 'Take Photo',
-            sublabel: 'Capture with camera',
-            icon: <Camera size={20} color={colors.primary} />,
-            onPress: () => openCamera('img'),
-          },
-          {
-            key: 'gal',
-            label: 'Choose from Gallery',
-            sublabel: `Select up to ${MAX_IMAGES - images.length} photo${
-              MAX_IMAGES - images.length === 1 ? '' : 's'
-            }`,
-            icon: <Images size={20} color={colors.primary} />,
-            onPress: () => pickFromGallery('img'),
-          },
-        ]
-      : [
-          {
-            key: 'rec',
-            label: 'Record Video',
-            sublabel: 'Capture with camera',
-            icon: <VideoIcon size={20} color={colors.primary} />,
-            onPress: () => openCamera('vid'),
-          },
-          {
-            key: 'gal',
-            label: 'Choose from Gallery',
-            sublabel: `Select up to ${MAX_VIDEOS - videos.length} video${
-              MAX_VIDEOS - videos.length === 1 ? '' : 's'
-            }`,
-            icon: <Images size={20} color={colors.primary} />,
-            onPress: () => pickFromGallery('vid'),
-          },
-        ];
 
   return (
     <View style={styles.root}>
@@ -377,7 +307,7 @@ const TaskExecutionScreen = ({ navigation, route }) => {
               <MediaTile key={img.id} item={img} onRemove={removeImage} onOpen={setViewer} />
             ))}
             {images.length < MAX_IMAGES && (
-              <Pressable style={styles.addTile} onPress={() => setSheet('img')}>
+              <Pressable style={styles.addTile} onPress={() => openCamera('img')}>
                 <Camera size={16} color={colors.primary} />
               </Pressable>
             )}
@@ -399,7 +329,7 @@ const TaskExecutionScreen = ({ navigation, route }) => {
               <MediaTile key={vid.id} item={vid} isVideoTile onRemove={removeVideo} onOpen={setViewer} />
             ))}
             {videos.length < MAX_VIDEOS && (
-              <Pressable style={styles.addTile} onPress={() => setSheet('vid')}>
+              <Pressable style={styles.addTile} onPress={() => openCamera('vid')}>
                 <VideoIcon size={16} color={colors.primary} />
               </Pressable>
             )}
@@ -433,13 +363,6 @@ const TaskExecutionScreen = ({ navigation, route }) => {
         </Pressable>
         <GradientButton label="Submit" onPress={handleSubmit} style={styles.submitBtn} />
       </SafeAreaView>
-
-      <ActionSheet
-        visible={sheet !== null}
-        title={sheet === 'img' ? 'Add Photo' : 'Add Video'}
-        options={sheetOptions}
-        onClose={() => setSheet(null)}
-      />
 
       <TaskPickerSheet
         visible={dropdownOpen}

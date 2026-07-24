@@ -66,7 +66,7 @@ const UpdateModal = ({
     : isNative
     ? 'A new version of the app is available. Please install the latest APK to continue.'
     : 'A new update is ready. Update now to get the latest improvements.';
-  const buttonLabel = downloading ? `Updating… ${progress ?? 0}%` : isNative ? 'Exit & Update' : 'Update Now';
+  const buttonLabel = downloading ? `Updating… ${progress ?? 0}%` : isNative ? 'OK' : 'Update Now';
 
   const width = bar.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
 

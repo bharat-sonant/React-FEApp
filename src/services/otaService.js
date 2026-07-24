@@ -3,17 +3,25 @@
  * needs no Firebase connection at startup (none exists before login here).
  *
  * checkForUpdates() looks at the repo's latest release and decides:
+ *   • DB / installed / release-tag version mismatch       → mandatory native block
  *   • ota-package.zip / index.android.bundle asset, new id → seamless JS update
  *   • newer tag with no JS asset (APK-only release)       → mandatory native block
  *   • same version                                        → up to date
+ *
+ * The version mismatch gate reads the admin-controlled latest native version
+ * from the active city's Realtime DB (OTA_DB_PATH), mirroring the IEC app. It
+ * is best-effort: Firebase is only reachable once a city is connected, so for a
+ * not-yet-logged-in user the DB read fails and this gate is skipped.
  *
  * Native side: NativeModules.OtaUpdater (getAppVersion / install / restart).
  */
 import { BackHandler, NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getData } from '../firebase/firebaseService';
 import {
   ENABLE_JS_BUNDLE_OTA,
+  OTA_DB_PATH,
   OTA_GITHUB_TOKEN,
   OTA_RELEASES_URL,
 } from '../constants/appVersion';
@@ -43,6 +51,24 @@ const getInstalledVersion = async () => {
   try {
     return normalizeVersion(await OtaUpdater?.getAppVersion?.());
   } catch {
+    return '';
+  }
+};
+
+/**
+ * The admin-controlled latest native version from the active city's Realtime
+ * DB (OTA_DB_PATH). Firebase is only reachable once a city is connected, so
+ * before login this throws and we return '' — the DB gate is then skipped.
+ * The node may be a bare version string or an object like { version: '...' }.
+ */
+const getDbVersion = async () => {
+  try {
+    const payload = await getData(OTA_DB_PATH);
+    const raw = typeof payload === 'string' ? payload : payload?.version;
+    console.log('[ota] db read', OTA_DB_PATH, '→', JSON.stringify(payload));
+    return normalizeVersion(raw);
+  } catch (e) {
+    console.log('[ota] db read failed (no city / offline?):', e?.message || String(e));
     return '';
   }
 };
@@ -105,10 +131,33 @@ export const checkForUpdates = async (callbacks = {}) => {
   if (__DEV__ || Platform.OS !== 'android') return false;
 
   try {
+    // ---- DB-driven mandatory native gate (IEC parity) ----
+    // The admin controls the latest native version in the active city's DB
+    // (OTA_DB_PATH). If the installed APK is behind it, the native build is
+    // stale → block until the user installs the new APK. This runs FIRST and
+    // needs no GitHub release, so "Version Expired" works even before any
+    // release is published. Skipped when no city is connected (dbVersion is '').
+    const dbVersion = await getDbVersion();
+    const installed = await getInstalledVersion();
+    console.log('[ota] version gate:', { dbVersion, installed });
+    if (dbVersion && installed && dbVersion !== installed) {
+      console.log('[ota] version expired → native block', { dbVersion, installed });
+      onUpdateFound?.({
+        version: dbVersion,
+        type: 'native',
+        mandatory: true,
+        apply: restartApp, // button exits; user reinstalls the APK
+      });
+      return true;
+    }
+
     const res = await fetch(OTA_RELEASES_URL, {
       headers: OTA_GITHUB_TOKEN ? { Authorization: `token ${OTA_GITHUB_TOKEN}` } : {},
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      console.log('[ota] release fetch not ok:', res.status);
+      return false;
+    }
 
     const release = await res.json();
     const latestVersion = normalizeVersion(release?.tag_name);
@@ -138,9 +187,9 @@ export const checkForUpdates = async (callbacks = {}) => {
       return true;
     }
 
-    // APK-only release (no JS asset): a native change. Block only when the
-    // release tag has moved past the installed APK's versionName.
-    const installed = await getInstalledVersion();
+    // APK-only release (no JS asset): a native change. Fallback for when the DB
+    // gate above was skipped (no city connected). Block only when the release
+    // tag has moved past the installed APK's versionName.
     if (!installed || latestVersion === installed) return false;
     onUpdateFound?.({
       version: latestVersion,
@@ -150,6 +199,7 @@ export const checkForUpdates = async (callbacks = {}) => {
     });
     return true;
   } catch (e) {
+    console.log('[ota] check error:', e?.message || String(e));
     onError?.(e?.message || String(e));
     return false;
   }

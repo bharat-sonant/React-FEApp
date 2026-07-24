@@ -25,8 +25,8 @@ export const RELEASE_VERSION = '1.0.0.1';
  *          OTA is skipped that run (a native release, not a JS hot-fix).
  * Flip these before pushing depending on what the release contains.
  */
-export const PUBLISH_OTA_BY_DEFAULT = true;
-export const PUBLISH_APK_BY_DEFAULT = false;
+export const PUBLISH_OTA_BY_DEFAULT = false;
+export const PUBLISH_APK_BY_DEFAULT = true;
 
 /**
  * GitHub "latest release" API for your APK/OTA repo. FILL THIS IN:
@@ -41,3 +41,13 @@ export const OTA_RELEASES_URL =
  * the bundle is readable by anyone who extracts it; prefer a public repo.
  */
 export const OTA_GITHUB_TOKEN = '';
+
+/**
+ * Realtime-DB node holding the admin-controlled latest *native* version for
+ * this app — e.g. { version: '1.0.0.1' } (a bare version string also works).
+ * Read from the ACTIVE CITY's database, so this gate only applies once a city
+ * is connected (a returning/logged-in user); before that it is skipped and the
+ * check falls back to GitHub-only. Mirrors the IEC app's
+ * Settings/LatestVersions/IECNativeApp. See otaService.checkForUpdates().
+ */
+export const OTA_DB_PATH = 'Settings/LatestVersions/FieldExecutiveNative';
