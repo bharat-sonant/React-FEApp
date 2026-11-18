@@ -10,6 +10,7 @@
 import { getData, updateData } from '../firebase/firebaseService';
 import { enqueueUploads } from './uploadQueueService';
 import { getUserCurrentLocation } from './locationTrackingService';
+import { getBranchCityKey, getTaskCatalogue } from './branchCityService';
 import { storage as prefs } from '../utils/storage';
 
 const MONTHS = [
@@ -139,9 +140,10 @@ export const taskCardKey = (t) => `${t?.id}|${t?.priority}|${t?.subKey ?? ''}`;
  * The global "Other" task catalogue: FieldExecutiveData/Tasks
  * Shape: { pushKey: { name } }. "lastKey" is an admin-side counter, not a task.
  * These are never assigned, so they are always low priority.
+ * A Jaipur Office employee working in another branch city gets that city's list.
  */
-export const getOtherTasks = async () => {
-  const snap = await getData('FieldExecutiveData/Tasks');
+export const getOtherTasks = async (userId) => {
+  const snap = await getTaskCatalogue(await getBranchCityKey(userId));
   if (!snap || typeof snap !== 'object') return [];
 
   const out = [];
@@ -167,7 +169,7 @@ export const getOtherTasks = async () => {
  *   ADD_OTHER → the global Tasks catalogue.
  */
 export const getSelectableTasks = async (mode, userId) => {
-  if (mode === 'ADD_OTHER') return getOtherTasks();
+  if (mode === 'ADD_OTHER') return getOtherTasks(userId);
   return (await getKpiTasks(userId)).sort(byName);
 };
 

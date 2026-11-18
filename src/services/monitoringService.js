@@ -10,6 +10,7 @@
  */
 import { getData } from '../firebase/firebaseService';
 import { getDateParts } from './taskService';
+import { getBranchCityKey, getBranchHistory, getCityKeyAt, getTaskCatalogue } from './branchCityService';
 
 /**
  * Old app's rule, kept exactly:
@@ -33,9 +34,8 @@ export const approvalStatus = (entry) => {
  * The old app only ever looked in Tasks/, so KPI and Priority rows showed no
  * name at all — that is a bug, not behaviour worth reproducing.
  */
-const buildNameLookup = async (userId, today) => {
-  const [other, kpi, priority] = await Promise.all([
-    getData('FieldExecutiveData/Tasks').catch(() => null),
+const buildNameLookup = async (userId, today, other) => {
+  const [kpi, priority] = await Promise.all([
     getData(`FieldExecutiveData/FieldExecutiveKPITasks/${userId}`).catch(() => null),
     getData(`FieldExecutiveData/FieldExecutivePriorityTasks/${userId}/${today}`).catch(() => null),
   ]);
@@ -82,13 +82,31 @@ export const getMonitoringTasks = async (userId, date = new Date()) => {
   const snap = await getData(path);
   if (!snap || typeof snap !== 'object') return [];
 
-  const names = await buildNameLookup(userId, today);
+  // The "Other" list that names a record is the one of the city the employee was in
+  // when it was submitted (see branchCityService).
+  const [history, currentCityKey] = await Promise.all([getBranchHistory(userId), getBranchCityKey(userId)]);
+  const cityKeyOf = (entry) => getCityKeyAt(history, currentCityKey, entry._at != null ? String(entry._at) : `${today} 00:00`);
+  const cityKeys = new Set();
+  for (const group of Object.values(snap)) {
+    if (!group || typeof group !== 'object') continue;
+    for (const entry of Object.values(group)) {
+      if (entry && typeof entry === 'object') cityKeys.add(cityKeyOf(entry));
+    }
+  }
+  const lookups = new Map();
+  await Promise.all(
+    [...cityKeys].map(async (cityKey) => {
+      const other = await getTaskCatalogue(cityKey).catch(() => null);
+      lookups.set(cityKey, await buildNameLookup(userId, today, other));
+    }),
+  );
 
   const rows = [];
   for (const [taskId, group] of Object.entries(snap)) {
     if (!group || typeof group !== 'object') continue;
     for (const [count, entry] of Object.entries(group)) {
       if (!entry || typeof entry !== 'object') continue;
+      const names = lookups.get(cityKeyOf(entry)) || new Map();
       rows.push({
         id: `${taskId}-${count}`,
         task: names.get(taskId) || taskId,
